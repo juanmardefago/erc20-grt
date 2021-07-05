@@ -1,6 +1,39 @@
-type ExampleEntity @entity {
+type Transfer @entity {
   id: ID!
-  count: BigInt!
-  owner: Bytes! # address
-  spender: Bytes! # address
+
+  to: GraphAccount!
+  from: GraphAccount!
+  value: BigInt!
+
+  blockNumber: Int!
+  blockHash: Bytes!
+  tx_hash: Bytes!
+}
+
+type Approval @entity {
+  id: ID!
+
+  owner: GraphAccount!
+  spender: GraphAccount!
+  value: BigInt!
+
+  blockNumber: Int!
+  blockHash: Bytes!
+  tx_hash: Bytes!
+}
+
+type GraphAccount @entity {
+  id: ID!
+  balance: BigInt!
+  createdAt: Int!
+  transfersReceived: [Transfer!]! @derivedFrom(field:"to")
+  transfersSent: [Transfer!]! @derivedFrom(field:"from")
+  approvals: [Approval!]! @derivedFrom(field:"owner")
+}
+
+type GraphNetwork @entity {
+  id: ID!
+  totalSupply: BigInt!
+  totalGRTMinted: BigInt!
+  totalGRTBurned: BigInt!
 }

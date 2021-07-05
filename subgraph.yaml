@@ -1,4 +1,4 @@
-specVersion: 0.0.1
+specVersion: 0.0.2
 schema:
   file: ./schema.graphql
 dataSources:
@@ -8,9 +8,10 @@ dataSources:
     source:
       address: "0xc944e90c64b2c07662a292be6244bdf05cda44a7"
       abi: ERC20
+      startBlock: 11446769
     mapping:
       kind: ethereum/events
-      apiVersion: 0.0.2
+      apiVersion: 0.0.4
       language: wasm/assemblyscript
       entities:
         - Approval
@@ -25,14 +26,14 @@ dataSources:
       eventHandlers:
         - event: Approval(indexed address,indexed address,uint256)
           handler: handleApproval
-        - event: MinterAdded(indexed address)
-          handler: handleMinterAdded
-        - event: MinterRemoved(indexed address)
-          handler: handleMinterRemoved
-        - event: NewOwnership(indexed address,indexed address)
-          handler: handleNewOwnership
-        - event: NewPendingOwnership(indexed address,indexed address)
-          handler: handleNewPendingOwnership
+        # - event: MinterAdded(indexed address)
+        #   handler: handleMinterAdded
+        # - event: MinterRemoved(indexed address)
+        #   handler: handleMinterRemoved
+        # - event: NewOwnership(indexed address,indexed address)
+        #   handler: handleNewOwnership
+        # - event: NewPendingOwnership(indexed address,indexed address)
+        #   handler: handleNewPendingOwnership
         - event: Transfer(indexed address,indexed address,uint256)
           handler: handleTransfer
       file: ./src/mapping.ts

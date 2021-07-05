@@ -1,77 +1,109 @@
-import { BigInt } from "@graphprotocol/graph-ts"
+import { BigInt } from "@graphprotocol/graph-ts";
 import {
   ERC20,
+  Approval as ApprovalEvent,
+  Transfer as TransferEvent
+} from "../generated/ERC20/ERC20";
+import {
+  Transfer,
   Approval,
-  MinterAdded,
-  MinterRemoved,
-  NewOwnership,
-  NewPendingOwnership,
-  Transfer
-} from "../generated/ERC20/ERC20"
-import { ExampleEntity } from "../generated/schema"
+  GraphAccount,
+  GraphNetwork
+} from "../generated/schema";
 
-export function handleApproval(event: Approval): void {
-  // Entities can be loaded from the store using a string ID; this ID
-  // needs to be unique across all entities of the same type
-  let entity = ExampleEntity.load(event.transaction.from.toHex())
+export function handleApproval(event: ApprovalEvent): void {
+  let owner = createOrLoadGraphAccount(event.params.owner.toHexString(), event.block.timestamp);
+  let spender = createOrLoadGraphAccount(event.params.spender.toHexString(), event.block.timestamp);
 
-  // Entities only exist after they have been saved to the store;
-  // `null` checks allow to create entities on demand
-  if (entity == null) {
-    entity = new ExampleEntity(event.transaction.from.toHex())
+  let approvalId = event.transaction.hash
+    .toHexString()
+    .concat("-")
+    .concat(event.logIndex.toString());
+  let approval = new Approval(approvalId);
 
-    // Entity fields can be set using simple assignments
-    entity.count = BigInt.fromI32(0)
-  }
+  approval.owner = owner.id;
+  approval.spender = spender.id;
+  approval.value = event.params.value;
 
-  // BigInt and BigDecimal math are supported
-  entity.count = entity.count + BigInt.fromI32(1)
+  approval.blockNumber = event.block.number.toI32();
+  approval.blockHash = event.block.hash;
+  approval.tx_hash = event.transaction.hash;
 
-  // Entity fields can be set based on event parameters
-  entity.owner = event.params.owner
-  entity.spender = event.params.spender
-
-  // Entities can be written to the store with `.save()`
-  entity.save()
-
-  // Note: If a handler doesn't require existing field values, it is faster
-  // _not_ to load the entity from the store. Instead, create it fresh with
-  // `new Entity(...)`, set the fields that should be updated and save the
-  // entity back to the store. Fields that were not set or unset remain
-  // unchanged, allowing for partial updates to be applied.
-
-  // It is also possible to access smart contracts from mappings. For
-  // example, the contract that has emitted the event can be connected to
-  // with:
-  //
-  // let contract = Contract.bind(event.address)
-  //
-  // The following functions can then be called on this contract to access
-  // state variables and other data:
-  //
-  // - contract.allowance(...)
-  // - contract.approve(...)
-  // - contract.balanceOf(...)
-  // - contract.decimals(...)
-  // - contract.decreaseAllowance(...)
-  // - contract.governor(...)
-  // - contract.increaseAllowance(...)
-  // - contract.isMinter(...)
-  // - contract.name(...)
-  // - contract.nonces(...)
-  // - contract.pendingGovernor(...)
-  // - contract.symbol(...)
-  // - contract.totalSupply(...)
-  // - contract.transfer(...)
-  // - contract.transferFrom(...)
+  approval.save();
 }
 
-export function handleMinterAdded(event: MinterAdded): void {}
+export function handleTransfer(event: TransferEvent): void {
+  let graphNetwork = getGraphNetwork();
 
-export function handleMinterRemoved(event: MinterRemoved): void {}
+  let to = event.params.to;
+  let from = event.params.from;
+  let value = event.params.value;
+  let userTo = createOrLoadGraphAccount(to.toHexString(), event.block.timestamp);
+  let userFrom = createOrLoadGraphAccount(from.toHexString(), event.block.timestamp);
 
-export function handleNewOwnership(event: NewOwnership): void {}
+  // no need to do any updates if it was a self transfer
+  if (to == from) return;
 
-export function handleNewPendingOwnership(event: NewPendingOwnership): void {}
+  // Mint Transfer
+  if (from.toHexString() == "0x0000000000000000000000000000000000000000") {
+    graphNetwork.totalSupply = graphNetwork.totalSupply.plus(value);
+    graphNetwork.totalGRTMinted = graphNetwork.totalGRTMinted.plus(value);
+    graphNetwork.save();
+    userTo.balance = userTo.balance.plus(value);
 
-export function handleTransfer(event: Transfer): void {}
+    // Burn Transfer
+  } else if (to.toHexString() == "0x0000000000000000000000000000000000000000") {
+    graphNetwork.totalSupply = graphNetwork.totalSupply.minus(value);
+    graphNetwork.totalGRTBurned = graphNetwork.totalGRTBurned.plus(value);
+    graphNetwork.save();
+
+    userFrom.balance = userFrom.balance.minus(value);
+
+    // Normal Transfer
+  } else {
+    userTo.balance = userTo.balance.plus(value);
+    userFrom.balance = userFrom.balance.minus(value);
+  }
+
+  userTo.save();
+  userFrom.save();
+
+  let transferId = event.transaction.hash
+    .toHexString()
+    .concat("-")
+    .concat(event.logIndex.toString());
+  let transfer = new Transfer(transferId);
+
+  transfer.to = userTo.id;
+  transfer.from = userFrom.id;
+  transfer.value = value;
+
+  transfer.blockNumber = event.block.number.toI32();
+  transfer.blockHash = event.block.hash;
+  transfer.tx_hash = event.transaction.hash;
+
+  transfer.save();
+}
+
+export function createOrLoadGraphAccount(id: string, timeStamp: BigInt): GraphAccount {
+  let graphAccount = GraphAccount.load(id);
+  if (graphAccount == null) {
+    graphAccount = new GraphAccount(id);
+    graphAccount.createdAt = timeStamp.toI32();
+    graphAccount.balance = BigInt.fromI32(0);
+    graphAccount.save();
+  }
+  return graphAccount as GraphAccount;
+}
+
+export function getGraphNetwork(): GraphNetwork {
+  let network = GraphNetwork.load("1");
+  if (network == null) {
+    network = new GraphNetwork("1");
+    network.totalSupply = BigInt.fromI32(0);
+    network.totalGRTMinted = BigInt.fromI32(0);
+    network.totalGRTBurned = BigInt.fromI32(0);
+    network.save();
+  }
+  return network as GraphNetwork;
+}
